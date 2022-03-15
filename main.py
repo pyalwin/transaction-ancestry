@@ -6,6 +6,8 @@ import json
 
 from functools import cache, cached_property
 
+from collections import defaultdict
+
 logger = logging.getLogger(__name__)
 
 API_ENDPOINT = "https://blockstream.info/api"
@@ -49,22 +51,6 @@ class Transactions:
         except Exception as e:
             logger.exception(e)
 
-    def preprocess_inputs(self):
-        # df = pd.read_csv('tran.csv')
-        # self.df = df
-        recs = self.df['vin'].to_list()
-        print(type(recs))
-        # inputs = [list(eval(rec)) for rec in recs]
-        input_trxns = []
-        # for r in inputs:
-        for r in recs:
-            txns = []
-            for l in r:
-                txns.append(l['txid'])
-            input_trxns.append(txns)
-        self.child_trxns = pd.DataFrame(input_trxns)
-
-
     def process_block(self, block_height):
         self.block = self.get_block(block_height)
         print(self.block)
@@ -72,27 +58,25 @@ class Transactions:
         for i in range(25, total_tran_count, 25):
             self.get_block_transactions(i)
         
-        self.df = pd.DataFrame(self.transactions)
-        # df.to_csv('tran.csv')
-        self.preprocess_inputs()
-        df_child = self.child_trxns
+        df = pd.DataFrame(self.transactions)                
+        df1 = df.explode('vin')
+        print(df1.columns)
+        df1['parent'] = df1['vin'].apply(lambda x: x['txid'])
+        df2 = df1[['txid','parent']]
+        df2['exists'] = df2.txid.isin(df2.parent)
+        df3 = df2[df2['exists'] == True]
+        final_trans = defaultdict(int)
 
-        child_list = []
+        for ix, row in df3.iterrows():
+            if (df3['txid'] == row['parent']).any():
+                final_trans[row['txid']] += 1
 
-        for ix, row in self.df.iterrows():
-            temp_df = df_child[df_child.isin([row['txid']]).any(axis=1)]
-            if not temp_df.empty:
-                child_list.append({
-                    'id': row['txid'],
-                    'children': list(temp_df.stack())
-                })
+        sorted_trans = sorted(final_trans.items(),key=lambda x: x[1], reverse=True)
 
-        df1 = pd.DataFrame(child_list)
-        df1.to_csv('processed_tran.csv')
-        return 
-
-
+        return sorted_trans[:10]
 
 obj = Transactions()
-obj.process_block(680000)
+max_ancestors = obj.process_block(680000)
+
+print(max_ancestors)
 
