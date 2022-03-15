@@ -84,12 +84,11 @@ class Transactions:
             if not temp_df.empty:
                 child_list.append({
                     'id': row['txid'],
-                    'children': len(list(temp_df.stack()))
+                    'children': list(temp_df.stack())
                 })
 
         df1 = pd.DataFrame(child_list)
-        df1.sort_values(by='children', ascending=False)
-        print(df1.head())
+        df1.to_csv('processed_tran.csv')
         return 
 
 
